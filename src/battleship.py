@@ -18,11 +18,13 @@ class Ship():
             return True
         return False
         
+
 class shipgrid(Fl_Group):
     """Class that contains each ship and handles events regarding them."""
     def __init__(self, x, y, sl, r, c):
         Fl_Group.__init__(self, x, y, c*sl, r*sl)
         self.tiles = []
+
         self.ships = []
         self.shipsizes = [2, 3, 3, 4, 5]
         self.ship_to_coords = {}
@@ -30,11 +32,13 @@ class shipgrid(Fl_Group):
         self.mode = "set"
         self.orient = "H"
         self.begin()
+
         for row in range(r):
             gr = []
             for col in range(c):
                 a = Tile(x+(row*sl), y+(col*sl), sl, sl, row, col)
                 a.color(FL_BLUE)
+
                 a.callback(self.click_cb)
                 gr.append(a)
             self.tiles.append(gr)
@@ -75,6 +79,10 @@ class shipgrid(Fl_Group):
             self.mode = "guess"
         self.redraw()
         return True
+
+
+    def but_cb(self, w):
+        w.color(FL_RED)
 
 class Game(Fl_Double_Window):
     """Class that controls general game management."""
