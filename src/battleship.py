@@ -39,7 +39,14 @@ class shipgrid(Fl_Group):
                 gr.append(a)
             self.tiles.append(gr)
         self.end()
-
+    
+    def handle(self, e):
+        a = super().handle(e)
+        if e == FL_PUSH:
+            if Fl.event_button() == FL_RIGHT_MOUSE:
+                self.orient = ("W" if self.orient == "H" else "H")
+                return 1
+        return a
     def click_cb(self, w):
         """Event handler for the grid."""
         if self.mode == "set":
@@ -49,7 +56,6 @@ class shipgrid(Fl_Group):
 
     def ins_ship(self, row, col):
         size = self.shipsizes[self.spos]
-        print(row, col, size, self.orient)
         if self.orient == "H":
             if row+size>10: return False
             tiles = [(row+f, col) for f in range(size)]
@@ -62,7 +68,6 @@ class shipgrid(Fl_Group):
         
         nship = Ship(size, tiles)
         for j in tiles:
-            print(j)
             self.ship_to_coords[j] = nship
             self.tiles[j[0]][j[1]].color(FL_RED)
         self.spos += 1
