@@ -9,16 +9,9 @@ class Tile(Fl_Button):
         self.c = c
 
 class Ship():
-    def __init__(self, size, r, c, orient):
+    def __init__(self, size, l):
         self.size = size
-        self.r = r
-        serlf.c = c
         self.hits = 0
-        if orient == "H":
-            self.tiles = [(r, c+f) for f in range(size)]
-        else:
-            self.tiles = [(r, c+f) for f in range(size)]
-
     def reduce(self):
         self.hits += 1
         if self.hits == self.size:
@@ -32,6 +25,7 @@ class shipgrid(Fl_Group):
         self.tiles = []
         self.ships = []
         self.shipsizes = [2, 3, 3, 4, 5]
+        self.ship_to_coords = {}
         self.spos = 0
         self.mode = "set"
         self.orient = "H"
@@ -39,7 +33,7 @@ class shipgrid(Fl_Group):
         for row in range(r):
             gr = []
             for col in range(c):
-                a = Tile(x+(row*sl), y+(col*sl), sl, sl)
+                a = Tile(x+(row*sl), y+(col*sl), sl, sl, row, col)
                 a.color(FL_BLUE)
                 a.callback(self.click_cb)
                 gr.append(a)
@@ -49,7 +43,34 @@ class shipgrid(Fl_Group):
     def click_cb(self, w):
         """Event handler for the grid."""
         if self.mode == "set":
-           pass 
+            self.ins_ship(w.r, w.c)
+        else:
+            pass
+
+    def ins_ship(self, row, col):
+        size = self.shipsizes[self.spos]
+        print(row, col, size, self.orient)
+        if self.orient == "H":
+            if row+size>10: return False
+            tiles = [(row+f, col) for f in range(size)]
+        else: 
+            if col+size>10: return False
+            tiles = [(row, col+f) for f in range(size)]
+
+        if any(a in self.ship_to_coords for a in tiles):
+            return False
+        
+        nship = Ship(size, tiles)
+        for j in tiles:
+            print(j)
+            self.ship_to_coords[j] = nship
+            self.tiles[j[0]][j[1]].color(FL_RED)
+        self.spos += 1
+        if self.spos >= len(self.shipsizes):
+            self.mode = "guess"
+        self.redraw()
+        return True
+
 class Game(Fl_Double_Window):
     """Class that controls general game management."""
     def __init__(self, w, h):
