@@ -78,9 +78,8 @@ class shipgrid(Fl_Group):
                 self.redraw()
                 return 1
 
-
-
         return a
+        
     def click_cb(self, w):
         """Event handler for the grid."""
         if self.mode == "set":
@@ -111,6 +110,10 @@ class shipgrid(Fl_Group):
         self.redraw()
         return True
 
+    def shoot(self, r, c):
+        if (r, c) in self.ship_to_grid:
+            return True
+        return False
 
     def but_cb(self, w):
         w.color(FL_RED)
