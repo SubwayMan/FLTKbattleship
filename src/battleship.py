@@ -8,6 +8,7 @@ class Tile(Fl_Button):
         self.r = r
         self.c = c
         self.isship = False
+            
 class Ship():
     def __init__(self, size, l):
         self.size = size
@@ -86,7 +87,8 @@ class shipgrid(Fl_Group):
             self.ins_ship(w.r, w.c)
         else:
             pass
-
+    
+   
     def ins_ship(self, row, col):
         size = self.shipsizes[self.spos]
         if self.orient == "H":
@@ -122,12 +124,57 @@ class Game(Fl_Double_Window):
     """Class that controls general game management."""
     def __init__(self, w, h):
         
-        Fl_Double_Window.__init__(self, w, h, "Battleship")
-        self.gridb = shipgrid(460, 20, 40, 10, 10)
-        self.grida = shipgrid(20, 20, 40, 10, 10)
+        Fl_Double_Window.__init__(self, 20, 20, w, h, "Battleship")
+        self.gridb = shipgrid(460, 30, 40, 10, 10)
+        self.grida = shipgrid(20, 30, 40, 10, 10)
+        self.mb = Fl_Menu_Bar(0, 0, self.w(), 20)
+        self.mb.add("Connect/Host", 0, self.host)
+        self.mb.add("Connect/Remote", 0, self.clientcon)
+        self.conn = None
         self.gridb.mode = "disp"
+        self.console = Fl_Browser(20, 450, 840, 140)
         self.show()
         Fl.run()
 
-a = Game(880, 440)
+    def host(self, w=None):
+        self.so = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.port = 7282
+        self.so.bind(("0.0.0.0", self.port))
+        self.so.listen()
+        fdl = self.so.fileno()
+        Fl.add_fd(fdl, self.acc_conn)
+
+    def acc_conn(self, f):
+        self.conn, raddr = self.so.accept()
+        self.fd = self.conn.fileno()
+        Fl.add_fd(self.fd, self.recpacket)
+
+    def hide(self):
+        super().hide()
+        try:
+            self.conn.close()
+        except:
+            pass
+
+    def clientcon(self, w=None):
+        if self.conn:
+            fl_alert("Connection already exists!")
+            return None
+        addr = fl_input("Enter host IP", "127.0.0.0")
+        res = self.connto(addr)
+        if not res:
+            fl_alert("Invalid connection!")
+
+
+    def connto(self, addr):
+        self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            self.conn.connect((addr, 7282))
+        except:
+            return False
+        self.fd = self.conn.fileno()
+        Fl.add_fd(self.fd, self.recpacket)
+        return True
+
+a = Game(880, 610)
 
