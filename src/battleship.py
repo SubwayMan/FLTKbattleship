@@ -92,7 +92,6 @@ class shipgrid(Fl_Group):
             self.ins_ship(w.r, w.c)
         elif self.mode == "guess":
             self.gamel.gate_t(w.r, w.c)
-            self.mode == "wait"
     
     def reveal(self, r, c):
         if (r, c) in self.ship_to_coords:
@@ -123,7 +122,10 @@ class shipgrid(Fl_Group):
             self.tiles[j[0]][j[1]].isship = True
         self.spos += 1
         if self.spos >= len(self.shipsizes):
-            self.mode = "guess"
+            self.mode = "WAIT"
+            self.gamel.aready = True
+            self.gamel.conn.sendall("R".encode())
+            self.gamel.ready()
         self.redraw()
         return True
 
@@ -218,11 +220,19 @@ class Game(Fl_Double_Window):
             if n[0] == "G":
                 rg, cg = map(int, n[1:].split())
                 self.grida.reveal(rg, cg)
+            elif n[0] == "R":
+                self.bready = True
+                self.ready()
 
     def begingame(self):
         self.grida.mode = "set"
         self.aready = False
         self.bready = False
+
+    def ready(self):
+        if self.aready and self.bready:
+            self.grida.mode = "DISP"
+            self.gridb.mode = "guess"
 
 a = Game(880, 610)
 
