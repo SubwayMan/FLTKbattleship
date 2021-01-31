@@ -14,6 +14,7 @@ class Ship():
     def __init__(self, size, l):
         self.size = size
         self.hits = 0
+        self.posit = l
     def reduce(self):
         self.hits += 1
         if self.hits == self.size:
@@ -96,17 +97,26 @@ class shipgrid(Fl_Group):
     def reveal(self, r, c):
         self.tiles[r][c].revealed = True
         if (r, c) in self.ship_to_coords:
-            self.tiles[r][c].color(FL_BLACK)
+ 
+            self.tiles[r][c].color(FL_RED)
+            jship = self.ship_to_coords[(r, c)]
+            if jship.reduce(): 
+                for row, col in jship.posit:
+                    self.tiles[row][col].color(FL_BLACK)
+                self.redraw()
+                return jship.posit
             self.redraw()
             return True
         else:
-            self.tiles[r][c].color(FL_YELLOW)
+            self.tiles[r][c].color(fl_rgb_color(3, 252, 227))
             self.redraw()
             return False
    
     def disp(self, r, c, v):
         if v=="N":
             self.tiles[r][c].color(fl_rgb_color(3, 252, 227))
+        elif v=="S":
+            self.tiles[r][c].color(FL_BLACK)
         else:
             self.tiles[r][c].color(FL_RED)
         self.redraw()
@@ -127,7 +137,7 @@ class shipgrid(Fl_Group):
         nship = Ship(size, tiles)
         for j in tiles:
             self.ship_to_coords[j] = nship
-            self.tiles[j[0]][j[1]].color(FL_RED)
+            self.tiles[j[0]][j[1]].color(FL_YELLOW)
             self.tiles[j[0]][j[1]].isship = True
         self.spos += 1
         if self.spos >= len(self.shipsizes):
@@ -158,6 +168,8 @@ class Game(Fl_Double_Window):
         self.mb.add("Connect/Remote", 0, self.clientcon)
         self.conn = None
         self.gridb.mode = "disp"
+        self.hits = 0
+        self.guesses = 0
         self.console = Fl_Multi_Browser(20, 450, 840, 140)
         self.show()
         self.hold = None
@@ -197,7 +209,6 @@ class Game(Fl_Double_Window):
         if not res:
             self.console.add("Invalid connection!")
 
-
     def connto(self, addr):
         
         try:
@@ -224,33 +235,68 @@ class Game(Fl_Double_Window):
     def recpacket(self, f):
         
         a = self.conn.recv(1024)
-        if a.decode() in "YN":
-            self.gridb.disp(self.hold[0], self.hold[1], a.decode())
-            res = ("MISS" if a.decode()=="N" else "HIT")
-            self.console.add(f"{res} on row {self.hold[0]}, column {self.hold[1]}")
-
+        
         if a==b"":
             self.console.add("Connection closed.")
             self.conn.close()
             self.conn = None
             Fl.remove_fd(f)
         else:
-            self.console.add("Data received!")
             n = a.decode()
-            if n[0] == "G":
+            if n[0] in "YN":
+                self.guesses += 1
+                if n[0] == "Y": self.hits += 1 
+                print(self.hits)
+                if len(n)>2:
+                    coords = [list(map(int, x.split())) for x in n[1:].split(",")]
+                    for row, col in coords:
+                        self.gridb.disp(row, col, "S")
+                    self.console.add(f"ENEMY SHIP SUNK on row {self.hold[0]}, column {self.hold[1]}")
+                    if self.hits==17:
+                        self.endgame("W")
+                        self.conn.sendall("L".encode())
+                    return None
+                self.gridb.disp(self.hold[0], self.hold[1], n)
+                res = ("MISS" if a.decode()=="N" else "HIT")
+                
+                self.console.add(f"{res} on row {self.hold[0]}, column {self.hold[1]}")
+                return None
+            
+            elif n[0] == "G":
                 self.turn = True
                 rg, cg = map(int, n[1:].split())
                 ans = self.grida.reveal(rg, cg)
                 if ans:
-                    self.console.add(f"ENEMY HIT on row {rg}, column {cg}")
-                    self.conn.sendall("Y".encode())
+                    if isinstance(ans, list):
+                        sunksh = ",".join(str(f[0])+" "+str(f[1]) for f in ans)
+                        self.conn.sendall(("Y"+sunksh).encode())
+                        self.console.add(f"SHIP SANK on row {rg}, column {cg}")
+                    else: 
+                        self.conn.sendall("Y".encode())
+                        self.console.add(f"ENEMY HIT on row {rg}, column {cg}")
                 else:
                     self.console.add(f"ENEMY MISS on row {rg}, column {cg}")
                     self.conn.sendall("N".encode())
                 print(self.turn)
+                return None
             elif n[0] == "R":
                 self.bready = True
                 self.ready()
+                return None
+            elif n[0] == "L":
+                self.endgame("L")
+                return None
+            self.console.add("Data received!")
+
+    def endgame(self, cond):
+        self.grida.mode = "inac"
+        self.gridb.mode = "inac"
+        if cond == "W":
+            fl_alert("Congratulations you won!")
+            self.console.add(f"Game won with {self.guesses} guesses.")
+        else:
+            fl_alert("Sorry, you lost.")
+            self.console.add(f"Enemy won with {self.guesses} guesses.")
 
     def begingame(self):
         self.grida.mode = "set"
