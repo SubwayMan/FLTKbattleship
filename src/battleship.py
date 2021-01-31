@@ -23,7 +23,7 @@ class Ship():
 
 class shipgrid(Fl_Group):
     """Class that contains each ship and handles events regarding them."""
-    def __init__(self, x, y, sl, r, c, gate_t=None):
+    def __init__(self, x, y, sl, r, c, gamelistener):
         Fl_Group.__init__(self, x, y, c*sl, r*sl)
         self.tiles = []
         self.sl = sl
@@ -33,8 +33,7 @@ class shipgrid(Fl_Group):
         self.spos = 0
         self.mode = "NC"
         self.orient = "H"
-        if gate_t:
-            self.gate_t = gate_t
+        self.gamel = gamelistener
         self.begin()
 
         for row in range(r):
@@ -91,16 +90,18 @@ class shipgrid(Fl_Group):
             return None
         if self.mode == "set":
             self.ins_ship(w.r, w.c)
-        elif self.mode == "send":
-            self.gate_t(w.r, w.col)
+        elif self.mode == "guess":
+            self.gamel.gate_t(w.r, w.c)
             self.mode == "wait"
     
     def reveal(self, r, c):
         if (r, c) in self.ship_to_coords:
             self.tiles[r][c].color(FL_BLACK)
+            self.redraw()
             return True
         else:
             self.tiles[r][c].color(FL_YELLOW)
+            self.redraw()
             return False
    
     def ins_ship(self, row, col):
@@ -139,8 +140,8 @@ class Game(Fl_Double_Window):
     def __init__(self, w, h):
         
         Fl_Double_Window.__init__(self, 20, 20, w, h, "Battleship")
-        self.grida = shipgrid(20, 30, 40, 10, 10)
-        self.gridb = shipgrid(460, 30, 40, 10, 10)
+        self.grida = shipgrid(20, 30, 40, 10, 10, self)
+        self.gridb = shipgrid(460, 30, 40, 10, 10, self)
         self.mb = Fl_Menu_Bar(0, 0, self.w(), 20)
         self.mb.add("Connect/Host", 0, self.host)
         self.mb.add("Connect/Remote", 0, self.clientcon)
@@ -200,7 +201,7 @@ class Game(Fl_Double_Window):
         return True
 
     def gate_t(self, row, col):
-        n = str(row)+" "+str(col)
+        n = "G"+str(row)+" "+str(col)
         self.conn.sendall(n.encode())
 
     def recpacket(self, f):
@@ -213,9 +214,15 @@ class Game(Fl_Double_Window):
             Fl.remove_fd(f)
         else:
             self.console.add("Data received!")
+            n = a.decode()
+            if n[0] == "G":
+                rg, cg = map(int, n[1:].split())
+                self.grida.reveal(rg, cg)
 
     def begingame(self):
         self.grida.mode = "set"
+        self.aready = False
+        self.bready = False
 
 a = Game(880, 610)
 
