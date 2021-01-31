@@ -31,7 +31,7 @@ class shipgrid(Fl_Group):
         self.shipsizes = [2, 3, 3, 4, 5]
         self.ship_to_coords = {}
         self.spos = 0
-        self.mode = "set"
+        self.mode = "NC"
         self.orient = "H"
         if gate_t:
             self.gate_t = gate_t
@@ -139,8 +139,8 @@ class Game(Fl_Double_Window):
     def __init__(self, w, h):
         
         Fl_Double_Window.__init__(self, 20, 20, w, h, "Battleship")
-        self.gridb = shipgrid(460, 30, 40, 10, 10)
         self.grida = shipgrid(20, 30, 40, 10, 10)
+        self.gridb = shipgrid(460, 30, 40, 10, 10)
         self.mb = Fl_Menu_Bar(0, 0, self.w(), 20)
         self.mb.add("Connect/Host", 0, self.host)
         self.mb.add("Connect/Remote", 0, self.clientcon)
@@ -165,6 +165,7 @@ class Game(Fl_Double_Window):
         self.fd = self.conn.fileno()
         Fl.add_fd(self.fd, self.recpacket)
         self.console.add(f"Connected to {raddr}")
+        self.begingame()
 
     def hide(self):
         super().hide()
@@ -177,7 +178,7 @@ class Game(Fl_Double_Window):
         if self.conn:
             fl_alert("Connection already exists!")
             return None
-        addr = fl_input("Enter host IP", "127.0.0.0")
+        addr = fl_input("Enter host IP", "127.0.0.1")
         res = self.connto(addr)
         if not res:
             self.console.add("Invalid connection!")
@@ -192,8 +193,10 @@ class Game(Fl_Double_Window):
         except (socket.gaierror, TimeoutError, ConnectionRefusedError):
             self.conn = None
             return False
+
         Fl.add_fd(self.fd, self.recpacket)
         self.console.add(f"Connected to remote host {addr}.")
+        self.begingame()
         return True
 
     def gate_t(self, row, col):
@@ -201,8 +204,18 @@ class Game(Fl_Double_Window):
         self.conn.sendall(n.encode())
 
     def recpacket(self, f):
-        console.add("data received!")
+        
+        a = self.conn.recv(1024)
+        if a==b"":
+            self.console.add("Connection closed.")
+            self.conn.close()
+            self.conn = None
+            Fl.remove_fd(f)
+        else:
+            self.console.add("Data received!")
 
+    def begingame(self):
+        self.grida.mode = "set"
 
 a = Game(880, 610)
 
