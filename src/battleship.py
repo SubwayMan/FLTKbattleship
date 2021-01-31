@@ -8,6 +8,7 @@ class Tile(Fl_Button):
         self.r = r
         self.c = c
         self.isship = False
+        self.revealed = False
             
 class Ship():
     def __init__(self, size, l):
@@ -22,7 +23,7 @@ class Ship():
 
 class shipgrid(Fl_Group):
     """Class that contains each ship and handles events regarding them."""
-    def __init__(self, x, y, sl, r, c):
+    def __init__(self, x, y, sl, r, c, gate_t=None):
         Fl_Group.__init__(self, x, y, c*sl, r*sl)
         self.tiles = []
         self.sl = sl
@@ -32,6 +33,8 @@ class shipgrid(Fl_Group):
         self.spos = 0
         self.mode = "set"
         self.orient = "H"
+        if gate_t:
+            self.gate_t = gate_t
         self.begin()
 
         for row in range(r):
@@ -80,14 +83,25 @@ class shipgrid(Fl_Group):
                 return 1
 
         return a
-        
+    
+   
     def click_cb(self, w):
         """Event handler for the grid."""
+        if w.revealed:
+            return None
         if self.mode == "set":
             self.ins_ship(w.r, w.c)
-        else:
-            pass
+        elif self.mode == "send":
+            self.gate_t(w.r, w.col)
+            self.mode == "wait"
     
+    def reveal(self, r, c):
+        if (r, c) in self.ship_to_coords:
+            self.tiles[r][c].color(FL_BLACK)
+            return True
+        else:
+            self.tiles[r][c].color(FL_YELLOW)
+            return False
    
     def ins_ship(self, row, col):
         size = self.shipsizes[self.spos]
@@ -132,22 +146,25 @@ class Game(Fl_Double_Window):
         self.mb.add("Connect/Remote", 0, self.clientcon)
         self.conn = None
         self.gridb.mode = "disp"
-        self.console = Fl_Browser(20, 450, 840, 140)
+        self.console = Fl_Multi_Browser(20, 450, 840, 140)
         self.show()
         Fl.run()
 
     def host(self, w=None):
         self.so = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.so.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.port = 7282
         self.so.bind(("0.0.0.0", self.port))
         self.so.listen()
         fdl = self.so.fileno()
         Fl.add_fd(fdl, self.acc_conn)
+        self.console.add(f"hosting with address {socket.gethostbyname(socket.gethostname())}")
 
     def acc_conn(self, f):
         self.conn, raddr = self.so.accept()
         self.fd = self.conn.fileno()
         Fl.add_fd(self.fd, self.recpacket)
+        self.console.add(f"Connected to {raddr}")
 
     def hide(self):
         super().hide()
@@ -163,18 +180,29 @@ class Game(Fl_Double_Window):
         addr = fl_input("Enter host IP", "127.0.0.0")
         res = self.connto(addr)
         if not res:
-            fl_alert("Invalid connection!")
+            self.console.add("Invalid connection!")
 
 
     def connto(self, addr):
-        self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        
         try:
+            self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.conn.connect((addr, 7282))
-        except:
+            self.fd = self.conn.fileno()
+        except (socket.gaierror, TimeoutError, ConnectionRefusedError):
+            self.conn = None
             return False
-        self.fd = self.conn.fileno()
         Fl.add_fd(self.fd, self.recpacket)
+        self.console.add(f"Connected to remote host {addr}.")
         return True
+
+    def gate_t(self, row, col):
+        n = str(row)+" "+str(col)
+        self.conn.sendall(n.encode())
+
+    def recpacket(self, f):
+        console.add("data received!")
+
 
 a = Game(880, 610)
 
