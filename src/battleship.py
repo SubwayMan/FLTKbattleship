@@ -90,10 +90,11 @@ class shipgrid(Fl_Group):
             return None
         if self.mode == "set":
             self.ins_ship(w.r, w.c)
-        elif self.mode == "guess":
+        elif self.mode == "guess" and self.gamel.turn:
             self.gamel.gate_t(w.r, w.c)
     
     def reveal(self, r, c):
+        self.tiles[r][c].revealed = True
         if (r, c) in self.ship_to_coords:
             self.tiles[r][c].color(FL_BLACK)
             self.redraw()
@@ -177,6 +178,7 @@ class Game(Fl_Double_Window):
         self.fd = self.conn.fileno()
         Fl.add_fd(self.fd, self.recpacket)
         self.console.add(f"Connected to {raddr}")
+        self.turn = True
         self.begingame()
 
     def hide(self):
@@ -207,6 +209,7 @@ class Game(Fl_Double_Window):
             return False
 
         Fl.add_fd(self.fd, self.recpacket)
+        self.turn = False
         self.console.add(f"Connected to remote host {addr}.")
         self.begingame()
         return True
@@ -215,12 +218,16 @@ class Game(Fl_Double_Window):
         n = "G"+str(row)+" "+str(col)
         self.hold = (row, col)
         self.conn.sendall(n.encode())
+        self.turn = False
+        print(f"just guessed")
 
     def recpacket(self, f):
         
         a = self.conn.recv(1024)
         if a.decode() in "YN":
             self.gridb.disp(self.hold[0], self.hold[1], a.decode())
+            res = ("MISS" if a.decode()=="N" else "HIT")
+            self.console.add(f"{res} on row {self.hold[0]}, column {self.hold[1]}")
 
         if a==b"":
             self.console.add("Connection closed.")
@@ -231,12 +238,16 @@ class Game(Fl_Double_Window):
             self.console.add("Data received!")
             n = a.decode()
             if n[0] == "G":
+                self.turn = True
                 rg, cg = map(int, n[1:].split())
                 ans = self.grida.reveal(rg, cg)
                 if ans:
+                    self.console.add(f"ENEMY HIT on row {rg}, column {cg}")
                     self.conn.sendall("Y".encode())
                 else:
+                    self.console.add(f"ENEMY MISS on row {rg}, column {cg}")
                     self.conn.sendall("N".encode())
+                print(self.turn)
             elif n[0] == "R":
                 self.bready = True
                 self.ready()
@@ -250,6 +261,10 @@ class Game(Fl_Double_Window):
         if self.aready and self.bready:
             self.grida.mode = "DISP"
             self.gridb.mode = "guess"
+            if self.turn:
+                self.console.add("Game starting - your turn!")
+            else:
+                self.console.add("Game starting - enemy's turn!")
 
 a = Game(880, 610)
 
