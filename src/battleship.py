@@ -57,7 +57,7 @@ class shipgrid(Fl_Group):
         if e == FL_MOVE:
             for grow in self.tiles:
                 for gt in grow:
-                    if not gt.isship:
+                    if not gt.isship and not gt.revealed:
                         gt.color(FL_BLUE)
 
             mx, my = (Fl.event_x()-self.x())//self.sl, (Fl.event_y()-self.y())//self.sl
@@ -103,6 +103,14 @@ class shipgrid(Fl_Group):
             self.redraw()
             return False
    
+    def disp(self, r, c, v):
+        if v=="N":
+            self.tiles[r][c].color(fl_rgb_color(3, 252, 227))
+        else:
+            self.tiles[r][c].color(FL_RED)
+        self.redraw()
+        self.tiles[r][c].revealed = True
+
     def ins_ship(self, row, col):
         size = self.shipsizes[self.spos]
         if self.orient == "H":
@@ -151,6 +159,7 @@ class Game(Fl_Double_Window):
         self.gridb.mode = "disp"
         self.console = Fl_Multi_Browser(20, 450, 840, 140)
         self.show()
+        self.hold = None
         Fl.run()
 
     def host(self, w=None):
@@ -204,11 +213,15 @@ class Game(Fl_Double_Window):
 
     def gate_t(self, row, col):
         n = "G"+str(row)+" "+str(col)
+        self.hold = (row, col)
         self.conn.sendall(n.encode())
 
     def recpacket(self, f):
         
         a = self.conn.recv(1024)
+        if a.decode() in "YN":
+            self.gridb.disp(self.hold[0], self.hold[1], a.decode())
+
         if a==b"":
             self.console.add("Connection closed.")
             self.conn.close()
@@ -219,7 +232,11 @@ class Game(Fl_Double_Window):
             n = a.decode()
             if n[0] == "G":
                 rg, cg = map(int, n[1:].split())
-                self.grida.reveal(rg, cg)
+                ans = self.grida.reveal(rg, cg)
+                if ans:
+                    self.conn.sendall("Y".encode())
+                else:
+                    self.conn.sendall("N".encode())
             elif n[0] == "R":
                 self.bready = True
                 self.ready()
