@@ -2,20 +2,32 @@ from fltk import *
 import os
 import socket
 
+#INSTRUCTIONS
+#Start hosting with the menu bar
+#Connect to the address outputted in console
+#Use shift to switch ship orientation
 class Tile(Fl_Button):
-    def __init__(self, x, y, w, h, r, c):
+    """Button class that also stores position in grid."""
+    def __init__(self, x, y, w, h, r, c) -> None:
+        """Constructor - normal button constructor, with grid coords."""
         Fl_Button.__init__(self, x, y, w, h)
         self.r = r
         self.c = c
+        #Store if ship or already revealed for external use
         self.isship = False
         self.revealed = False
             
 class Ship():
-    def __init__(self, size, l):
+    """helper class that detects if sunk and stores ship coords."""
+    def __init__(self, size, l) -> None:
+        """Constructor - size and list of coords"""
         self.size = size
+        #store hits
         self.hits = 0
         self.posit = l
-    def reduce(self):
+
+    def reduce(self) -> bool:
+        """Adds to hits and returns true if sank."""
         self.hits += 1
         if self.hits == self.size:
             return True
@@ -23,20 +35,29 @@ class Ship():
         
 
 class shipgrid(Fl_Group):
-    """Class that contains each ship and handles events regarding them."""
-    def __init__(self, x, y, sl, r, c, gamelistener):
+    """Main grid class that controls ship placing, event handling, etc."""
+
+    def __init__(self, x, y, sl, r, c, gamelistener) -> None:
+        """Constructor - takes x&y position coords, a sidelength for a tile, number of rows
+        and columns, and a main class for handling network events."""
         Fl_Group.__init__(self, x, y, c*sl, r*sl)
+        #Store tiles, sidelength, ships, shipsizes
         self.tiles = []
         self.sl = sl
         self.ships = []
         self.shipsizes = [2, 3, 3, 4, 5]
+        #Dictionary that keeps coords with ships at them and the ship they point to
         self.ship_to_coords = {}
+        #Position in the shipsizes list used during creation
         self.spos = 0
+        #grid mode and ship orientation
         self.mode = "NC"
         self.orient = "H"
+        #store main class
         self.gamel = gamelistener
         self.begin()
 
+        #create tiles
         for row in range(r):
             gr = []
             for col in range(c):
@@ -48,21 +69,27 @@ class shipgrid(Fl_Group):
             self.tiles.append(gr)
         self.end()
     
-    def handle(self, e):
+    def handle(self, e) -> int:
+        """Handle method, mostly ship placing functionality."""
         a = super().handle(e)
+        #switch ship orientation
         if e == FL_KEYUP:
             if self.mode == "set":
                 if Fl.event_key() == FL_Shift_L:
                     self.orient = ("W" if self.orient == "H" else "H")
                     return 1
+        #ship preview when placing
         if e == FL_MOVE:
+            #reset any tiles from last hover
             for grow in self.tiles:
                 for gt in grow:
                     if not gt.isship and not gt.revealed:
                         gt.color(FL_BLUE)
-
+            #relative x and y coords
             mx, my = (Fl.event_x()-self.x())//self.sl, (Fl.event_y()-self.y())//self.sl
+            #check mode
             if self.mode == "set":
+                #horizontal ship
                 if self.orient=="H":
                     for i in range(self.shipsizes[self.spos]):
                         if i+mx>9:
@@ -72,6 +99,7 @@ class shipgrid(Fl_Group):
                             break
                         t.color(fl_rgb_color(255, 123, 0))
                 else:
+                    #vertical ship
                     for i in range(self.shipsizes[self.spos]):
                         if i+my>9:
                             break
@@ -85,20 +113,26 @@ class shipgrid(Fl_Group):
         return a
     
    
-    def click_cb(self, w):
-        """Event handler for the grid."""
+    def click_cb(self, w) -> None:
+        """Event handler for each tile."""
+        #do nothing if revealed
         if w.revealed:
             return None
+        #insert ship
         if self.mode == "set":
             self.ins_ship(w.r, w.c)
+        #if is turn and mode is guess, send guess
         elif self.mode == "guess" and self.gamel.turn:
             self.gamel.gate_t(w.r, w.c)
     
-    def reveal(self, r, c):
+    def reveal(self, r, c) -> bool:
+        """Guess method."""
+
         self.tiles[r][c].revealed = True
         if (r, c) in self.ship_to_coords:
  
             self.tiles[r][c].color(FL_RED)
+            #get ship and check for sinking
             jship = self.ship_to_coords[(r, c)]
             if jship.reduce(): 
                 for row, col in jship.posit:
@@ -108,11 +142,13 @@ class shipgrid(Fl_Group):
             self.redraw()
             return True
         else:
+            #incorrect guess
             self.tiles[r][c].color(fl_rgb_color(3, 252, 227))
             self.redraw()
             return False
    
-    def disp(self, r, c, v):
+    def disp(self, r, c, v) -> None:
+        """Reveal method for client grid from incoming event."""
         if v=="N":
             self.tiles[r][c].color(fl_rgb_color(3, 252, 227))
         elif v=="S":
@@ -122,7 +158,8 @@ class shipgrid(Fl_Group):
         self.redraw()
         self.tiles[r][c].revealed = True
 
-    def ins_ship(self, row, col):
+    def ins_ship(self, row, col) -> bool:
+        """Method that inserts ship, returns validity of ship placement."""
         size = self.shipsizes[self.spos]
         if self.orient == "H":
             if col+size>10: return False
@@ -141,6 +178,7 @@ class shipgrid(Fl_Group):
             self.tiles[j[0]][j[1]].isship = True
         self.spos += 1
         if self.spos >= len(self.shipsizes):
+            #change mode if all ships placed
             self.mode = "WAIT"
             self.gamel.aready = True
             self.gamel.conn.sendall("R".encode())
@@ -148,18 +186,10 @@ class shipgrid(Fl_Group):
         self.redraw()
         return True
 
-    def shoot(self, r, c):
-        if (r, c) in self.ship_to_grid:
-            return True
-        return False
-
-    def but_cb(self, w):
-        w.color(FL_RED)
-
 class Game(Fl_Double_Window):
-    """Class that controls general game management."""
+    """Class that controls general game management and networking."""
     def __init__(self, w, h):
-        
+        """Constructor, args: width and height"""
         Fl_Double_Window.__init__(self, 20, 20, w, h, "Battleship")
         self.grida = shipgrid(20, 30, 40, 10, 10, self)
         self.gridb = shipgrid(460, 30, 40, 10, 10, self)
@@ -175,7 +205,8 @@ class Game(Fl_Double_Window):
         self.hold = None
         Fl.run()
 
-    def host(self, w=None):
+    def host(self, w=None) -> None:
+        """Method to start hosting locally."""
         self.so = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.so.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.port = 7282
@@ -186,6 +217,7 @@ class Game(Fl_Double_Window):
         self.console.add(f"hosting with address {socket.gethostbyname(socket.gethostname())}")
 
     def acc_conn(self, f):
+        "For hosting when receiving incoming connection."
         self.conn, raddr = self.so.accept()
         self.fd = self.conn.fileno()
         Fl.add_fd(self.fd, self.recpacket)
@@ -194,6 +226,7 @@ class Game(Fl_Double_Window):
         self.begingame()
 
     def hide(self):
+        """extending hide to assure connection closing."""
         super().hide()
         try:
             self.conn.close()
@@ -201,6 +234,7 @@ class Game(Fl_Double_Window):
             pass
 
     def clientcon(self, w=None):
+        """callback for entering ip and connecting."""
         if self.conn:
             fl_alert("Connection already exists!")
             return None
@@ -210,7 +244,7 @@ class Game(Fl_Double_Window):
             self.console.add("Invalid connection!")
 
     def connto(self, addr):
-        
+        """For client->server connection via tcp."""
         try:
             self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.conn.connect((addr, 7282))
@@ -226,16 +260,17 @@ class Game(Fl_Double_Window):
         return True
 
     def gate_t(self, row, col):
+        """Method that sends a guess to other player."""
         n = "G"+str(row)+" "+str(col)
         self.hold = (row, col)
         self.conn.sendall(n.encode())
         self.turn = False
-        print(f"just guessed")
 
     def recpacket(self, f):
-        
+        """General receive method over network."""
         a = self.conn.recv(1024)
         
+        #remote close
         if a==b"":
             self.console.add("Connection closed.")
             self.conn.close()
@@ -243,10 +278,10 @@ class Game(Fl_Double_Window):
             Fl.remove_fd(f)
         else:
             n = a.decode()
+            #is a guess result
             if n[0] in "YN":
                 self.guesses += 1
                 if n[0] == "Y": self.hits += 1 
-                print(self.hits)
                 if len(n)>2:
                     coords = [list(map(int, x.split())) for x in n[1:].split(",")]
                     for row, col in coords:
@@ -261,7 +296,7 @@ class Game(Fl_Double_Window):
                 
                 self.console.add(f"{res} on row {self.hold[0]}, column {self.hold[1]}")
                 return None
-            
+            #is an incoming guess
             elif n[0] == "G":
                 self.turn = True
                 rg, cg = map(int, n[1:].split())
@@ -277,18 +312,20 @@ class Game(Fl_Double_Window):
                 else:
                     self.console.add(f"ENEMY MISS on row {rg}, column {cg}")
                     self.conn.sendall("N".encode())
-                print(self.turn)
                 return None
+            #is a notification of ready status
             elif n[0] == "R":
                 self.bready = True
                 self.ready()
                 return None
+            #Is an indication of game loss
             elif n[0] == "L":
                 self.endgame("L")
                 return None
             self.console.add("Data received!")
 
     def endgame(self, cond):
+        """End the game."""
         self.grida.mode = "inac"
         self.gridb.mode = "inac"
         if cond == "W":
@@ -296,14 +333,16 @@ class Game(Fl_Double_Window):
             self.console.add(f"Game won with {self.guesses} guesses.")
         else:
             fl_alert("Sorry, you lost.")
-            self.console.add(f"Enemy won with {self.guesses} guesses.")
+            self.console.add(f"Enemy won.")
 
     def begingame(self):
+        """Start the game."""
         self.grida.mode = "set"
         self.aready = False
         self.bready = False
 
     def ready(self):
+        """Verify if both players have ships set."""
         if self.aready and self.bready:
             self.grida.mode = "DISP"
             self.gridb.mode = "guess"
